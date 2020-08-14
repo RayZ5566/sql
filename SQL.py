@@ -136,7 +136,16 @@ prolific_commenters = query_job.to_dataframe()
 prolific_commenters.head()
 
 
-
+#How many comments have been deleted? (If a comment was deleted, the deleted column in the comments table will have the value True.)
+prolific_commenters_query = """
+                            select deleted, count(id) as numposts
+                            from `bigquery-public-data.hacker_news.comments`
+                            group by deleted
+                            """
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed = 10**10)
+query_job = client.query(prolific_commenters_query, job_config=safe_config)
+deleted_comments = query_job.to_dataframe()
+deleted_comments.head()
 #-----------------------------------------------------#
 #Chicago
 client = bigquery.Client()
