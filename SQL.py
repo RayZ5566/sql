@@ -4,7 +4,7 @@ import os
 #setting environment
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'C:/Users/user/Desktop/Kaggle/SQL/t-variety-286403-e5a0529c090d.json'
 
-
+#HACKER_NEWS
 client = bigquery.Client()
 #loeading dataset
 dataset_ref = client.dataset('hacker_news', project='bigquery-public-data')
@@ -13,7 +13,7 @@ tables = list(client.list_tables(dataset))
 
 for table in tables:
     print(table.table_id)
-    
+# Construct a reference to the "full" table    
 table_ref = dataset_ref.table('full')
 table = client.get_table(table_ref)
 
@@ -54,6 +54,74 @@ job_post_scores = safe_query_job1.to_dataframe()
 job_post_scores.score.mean()
 
 
+## Construct a reference to the "comments" table
+table_ref = dataset_ref.table('comments')
+# API request - fetch the table
+table = client.get_table(table_ref)
+#preview the fitst five lines of the 'comments' table
+client.list_rows(table, max_results=5).to_dataframe()
+
+# Query to select comments that received more than 10 replies
+query_popular = """
+                select parent, count(id)
+                from `bigquery-public-data.hacker_news.comments`
+                group by parent
+                having count(id) > 10
+                """
+
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed = 10**10)
+query_job = client.query(query_popular, job_config=safe_config)
+
+popular_comments = query_job.to_dataframe()
+
+popular_comments.head()
+
+# Improved version of earlier query, now with aliasing & improved readability
+query_improved = """
+                 SELECT parent, COUNT(1) AS NumPosts
+                 FROM `bigquery-public-data.hacker_news.comments`
+                 GROUP BY parent
+                 HAVING COUNT(1) > 10
+                 """
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+query_job = client.query(query_improved, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+improved_df = query_job.to_dataframe()
+
+# Print the first five rows of the DataFrame
+improved_df.head()
+
+
+
+query_good = """
+             SELECT parent, COUNT(id)
+             FROM `bigquery-public-data.hacker_news.comments`
+             GROUP BY parent
+             """
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+query_job = client.query(query_good, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+improved_df = query_job.to_dataframe()
+
+# Print the first five rows of the DataFrame
+improved_df.head()
+
+#ERROR!!!
+query_bad = """
+            SELECT author, parent, COUNT(id)
+            FROM `bigquery-public-data.hacker_news.comments`
+            GROUP BY parent
+            """
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+query_job = client.query(query_bad, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+improved_df = query_job.to_dataframe()
+
+# Print the first five rows of the DataFrame
+improved_df.head()
 #-----------------------------------------------------#
 #Chicago
 client = bigquery.Client()
