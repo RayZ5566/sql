@@ -354,3 +354,147 @@ code_count_results = code_count_query_job.to_dataframe()
 
 # View top few rows of results
 print(code_count_results.head())
+
+
+#-----------As With-----------------------------------------------------------#
+#How many Bitcoin transactions are made per month?
+# Construct a reference to the "crypto_bitcoin" dataset
+dataset_ref = client.dataset("crypto_bitcoin", project="bigquery-public-data")
+
+# API request - fetch the dataset
+dataset = client.get_dataset(dataset_ref)
+
+# Construct a reference to the "transactions" table
+table_ref = dataset_ref.table("transactions")
+
+# API request - fetch the table
+table = client.get_table(table_ref)
+
+# Preview the first five lines of the "transactions" table
+client.list_rows(table, max_results=5).to_dataframe()
+
+# Query to select the number of transactions per date, sorted by date
+query_with_cte = """
+                 WITH time As
+                 (
+                     SELECT date(block_timestamp) as trans_date
+                     FROM `bigquery-public-data.crypto_bitcoin.transactions`
+                     )
+                 SELECT count(1) AS transactions,
+                        trans_date
+                 FROM time
+                 GROUP BY trans_date
+                 ORDER BY trans_date
+                 """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 10 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+query_job = client.query(query_with_cte, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+transactions_by_date = query_job.to_dataframe()
+
+# Print the first five rows
+transactions_by_date.head()
+
+# raw results to show us the number of Bitcoin transactions per day over the whole timespan of this dataset.
+transactions_by_date.set_index('trans_date').plot()
+
+
+#taxi trips in the city of Chicago.
+# Construct a reference to the "chicago_taxi_trips" dataset
+dataset_ref = client.dataset("chicago_taxi_trips", project="bigquery-public-data")
+
+# API request - fetch the dataset
+dataset = client.get_dataset(dataset_ref)
+
+tables = list(client.list_tables(dataset))
+for table in tables:
+    print(table.table_id)
+# Construct a reference to the "taxi_trips" table
+table_ref = dataset_ref.table("taxi_trips")
+# API request - fetch the table
+table = client.get_table(table_ref)
+
+# Preview the first five lines of the "transactions" table
+client.list_rows(table, max_results=5).to_dataframe()
+
+
+rides_per_year_query = """
+                       SELECT EXTRACT(year FROM trip_start_timestamp) as year,
+                              COUNT(unique_key) as num_trips
+                      FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`
+                      GROUP BY year
+                      ORDER BY count(unique_key) DESC
+                      """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 10 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+rides_per_year_query_job = client.query(rides_per_year_query, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+rides_per_year_result = rides_per_year_query_job.to_dataframe()
+
+# Print the first five rows
+rides_per_year_result.head()
+# View results
+print(rides_per_year_result)
+
+#You'd like to take a closer look at rides from 2017.
+rides_per_month_query = """
+                       SELECT EXTRACT(month FROM trip_start_timestamp) as month,
+                              COUNT(unique_key) as num_trips
+                      FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`
+                      WHERE EXTRACT(year FROM trip_start_timestamp) = 2017
+                      GROUP BY month
+                      ORDER BY count(unique_key) DESC
+                      """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 10 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+rides_per_month_query_job = client.query(rides_per_month_query, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+rides_per_month_result = rides_per_month_query_job.to_dataframe()
+
+# Print the first five rows
+rides_per_month_result.head()
+# View results
+print(rides_per_month_result)
+
+#Write a query that shows, for each hour of the day in the dataset, the corresponding number of trips and average speed.
+speeds_query = """
+               WITH RelevantRides AS
+                (
+                    SELECT EXTRACT(hour FROM trip_start_timestamp) as hour_of_day,
+                           trip_miles,
+                           trip_seconds,
+                           unique_key,
+                           
+                    FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`
+                    WHERE trip_start_timestamp > '2017-01-01'
+                          and trip_start_timestamp < '2017-07-01' 
+                          and trip_seconds > 0 
+                          and trip_miles > 0
+                ) 
+                SELECT hour_of_day,
+                       COUNT(unique_key) as num_trips,
+                       3600 * SUM(trip_miles) / sum(trip_seconds) as avg_mph
+                FROM RelevantRides
+                GROUP BY hour_of_day
+                ORDER BY hour_of_day
+                """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 10 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**12)
+speeds_query_job = client.query(speeds_query, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+speeds_result = speeds_query_job.to_dataframe()
+
+# Print the first five rows
+speeds_result.head()
+# View results
+print(speeds_result)
+
+
