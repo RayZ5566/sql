@@ -497,4 +497,184 @@ speeds_result.head()
 # View results
 print(speeds_result)
 
+#-------------------------------------------------------------#
+# How many files are covered by each type of software license?
+from google.cloud import bigquery
 
+# Create a "Client" object
+client = bigquery.Client()
+
+# Construct a reference to the "github_repos" dataset
+dataset_ref = client.dataset("github_repos", project="bigquery-public-data")
+
+# API request - fetch the dataset
+dataset = client.get_dataset(dataset_ref)
+
+# Construct a reference to the "licenses" table
+licenses_ref = dataset_ref.table("licenses")
+
+# API request - fetch the table
+licenses_table = client.get_table(licenses_ref)
+
+# Preview the first five lines of the "licenses" table
+client.list_rows(licenses_table, max_results=5).to_dataframe()
+# Construct a reference to the "sample_files" table
+files_ref = dataset_ref.table("sample_files")
+
+# API request - fetch the table
+files_table = client.get_table(files_ref)
+
+# Preview the first five lines of the "sample_files" table
+client.list_rows(files_table, max_results=5).to_dataframe()
+
+# Query to determine the number of files per license, sorted by number of files
+query = """
+        SELECT l.license, COUNT(1) as number_of_files
+        FROM `bigquery-public-data.github_repos.sample_files` AS sf
+        INNER JOIN `bigquery-public-data.github_repos.licenses` AS l
+            ON sf.repo_name = l.repo_name
+        GROUP BY l.license
+        ORDER BY number_of_files DESC
+        """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 10 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+query_job = client.query(query, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+file_count_by_license = query_job.to_dataframe()
+# Print the DataFrame
+file_count_by_license
+
+
+#write the SQL queries that might serve as the foundation for this type of service.
+
+# Create a "Client" object
+client = bigquery.Client()
+# Construct a reference to the "stackoverflow" dataset
+dataset_ref = client.dataset('stackoverflow', project='bigquery-public-data')
+# API request - fetch the dataset
+dataset = client.get_dataset(dataset_ref)
+# Get a list of available tables 
+tables = list(client.list_tables(dataset))
+list_of_table = [table.table_id for table in tables]
+print(list_of_table)
+# Construct a reference to the "posts_answers" table
+answers_table_ref = dataset_ref.table("posts_answers")
+
+# API request - fetch the table
+answers_table = client.get_table(answers_table_ref)
+
+# Preview the first five lines of the "posts_answers" table
+client.list_rows(answers_table, max_results=5).to_dataframe()
+
+# Construct a reference to the "posts_questions" table
+questions_table_ref = dataset_ref.table("posts_questions")
+
+# API request - fetch the table
+questions_table = client.get_table(questions_table_ref)
+
+# Preview the first five lines of the "posts_questions" table
+client.list_rows(questions_table, max_results=5).to_dataframe()
+
+
+questions_query = """
+                  SELECT id, title, owner_user_id
+                  FROM `bigquery-public-data.stackoverflow.posts_questions`
+                  WHERE tags LIKE '%bigquery%'
+                  """
+
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 1 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+questions_query_job = client.query(questions_query, job_config=safe_config) # Your code goes here
+
+# API request - run the query, and return a pandas DataFrame
+questions_results = questions_query_job.to_dataframe() # Your code goes here
+
+# Preview results
+print(questions_results.head())
+
+
+#
+answers_query = """
+                SELECT a.id,
+                       a.body,
+                       a.owner_user_id
+                FROM `bigquery-public-data.stackoverflow.posts_questions` AS q 
+                INNER JOIN `bigquery-public-data.stackoverflow.posts_answers` AS a
+                    ON q.id = a.parent_id
+                WHERE q.tags Like '%bigquery%'
+                """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 1 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**12)
+answers_query_job = client.query(answers_query, job_config=safe_config)
+
+# API request - run the query, and return a pandas DataFrame
+answers_results = answers_query_job.to_dataframe()
+
+# Preview results
+print(answers_results.head())
+
+
+#Answer the question
+#You have the merge you need. But you want a list of users who have answered many questions... which requires more work beyond your previous result.
+
+#Write a new query that has a single row for each user who answered at least one question with a tag that includes the string "bigquery". Your results should have two columns:
+
+#user_id - contains the owner_user_id column from the posts_answers table
+#number_of_answers - contains the number of answers the user has written to "bigquery"-related questions
+
+bigquery_experts_query = """
+                         SELECT a.owner_user_id as user_id,
+                                COUNT(1) as number_of_answers
+                         FROM `bigquery-public-data.stackoverflow.posts_questions` AS q
+                         INNER JOIN `bigquery-public-data.stackoverflow.posts_answers` AS a
+                             ON q.id = a.parent_id
+                         WHERE q.tags LIKE '%bigquery%'
+                         GROUP By a.owner_user_id
+                         """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 1 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+bigquery_experts_query_job = client.query(bigquery_experts_query, job_config=safe_config)
+
+# API request - run the query, and return a pandas DataFrame
+bigquery_experts_results = bigquery_experts_query_job.to_dataframe()
+# Preview results
+print(bigquery_experts_results.head())
+
+
+#Building a more generally useful service
+#How could you convert what you've done to a general function a website could call on the backend to get experts on any topic?
+
+def expert_finder(topic, client):
+    '''
+    Returns a DataFrame with the user IDs who have written Stack Overflow answers on a topic.
+
+    Inputs:
+        topic: A string with the topic of interest
+        client: A Client object that specifies the connection to the Stack Overflow dataset
+
+    Outputs:
+        results: A DataFrame with columns for user_id and number_of_answers. Follows similar logic to bigquery_experts_results shown above.
+    '''
+    my_query = """
+               SELECT a.owner_user_id AS user_id, COUNT(1) AS number_of_answers
+               FROM `bigquery-public-data.stackoverflow.posts_questions` AS q
+               INNER JOIN `bigquery-public-data.stackoverflow.posts_answers` AS a
+                   ON q.id = a.parent_Id
+               WHERE q.tags like '%{topic}%'
+               GROUP BY a.owner_user_id
+               """
+
+    # Set up the query (a real service would have good error handling for 
+    # queries that scan too much data)
+    safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)      
+    my_query_job = client.query(my_query, job_config=safe_config)
+
+    # API request - run the query, and return a pandas DataFrame
+    results = my_query_job.to_dataframe()
+
+    return results
