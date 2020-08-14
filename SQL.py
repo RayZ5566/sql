@@ -81,7 +81,9 @@ client.list_rows(table, selected_fields=table.schema[-3:], max_results = 5).to_d
 
 
 #-----------------------------------------------#
+#global_air_quality
 #What are all the U.S. cities in the OpenAQ dataset?
+client = bigquery.Client()
 dataset_ref =client.dataset('openaq', project='bigquery-public-data')
 dataset = client.get_dataset(dataset_ref)
 tables = list(client.list_tables(dataset))
@@ -124,3 +126,37 @@ cities.city.value_counts().head()
 cities.country.value_counts().head()
 cities.location.value_counts().head()
 
+# Query to select countries with units of "ppm"
+query3 = """
+        select country
+        from `bigquery-public-data.openaq.global_air_quality`
+        where unit = 'ppm'
+        """
+query_job3 = client.query(query3)
+ppm = query_job3.to_dataframe()
+ppm.country.value_counts().head()
+
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 10 GB)
+safe_config2 = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+first_query_job = client.query(query3, job_config=safe_config2)
+# API request - run the query, and return a pandas DataFrame
+first_results = first_query_job.to_dataframe()
+# View top few rows of results
+print(first_results.head())
+
+# Query to select all columns where pollution levels are exactly 0
+query4 = """
+        SELECT *
+        FROM `bigquery-public-data.openaq.global_air_quality`
+        WHERE value = 0
+        """
+
+# Set up the query
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+query_job = client.query(query4, job_config=safe_config)
+
+# API request - run the query and return a pandas DataFrame
+zero_pollution_results = query_job.to_dataframe()
+
+print(zero_pollution_results.head())
