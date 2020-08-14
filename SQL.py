@@ -122,6 +122,21 @@ improved_df = query_job.to_dataframe()
 
 # Print the first five rows of the DataFrame
 improved_df.head()
+
+# Query to select prolific commenters and post counts
+prolific_commenters_query = """
+                            select author, count(id) as numposts
+                            from `bigquery-public-data.hacker_news.comments`
+                            group by author
+                            having count(id) >10000
+                            """
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed = 10**10)
+query_job = client.query(prolific_commenters_query, job_config=safe_config)
+prolific_commenters = query_job.to_dataframe()
+prolific_commenters.head()
+
+
+
 #-----------------------------------------------------#
 #Chicago
 client = bigquery.Client()
