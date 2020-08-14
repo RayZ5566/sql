@@ -252,3 +252,105 @@ query_job = client.query(query4, job_config=safe_config)
 zero_pollution_results = query_job.to_dataframe()
 
 print(zero_pollution_results.head())
+
+
+#---------------------------------------------------------#
+#Example: Which day of the week has the most fatal motor accidents?
+# Create a "Client" object
+client = bigquery.Client()
+
+# Construct a reference to the "nhtsa_traffic_fatalities" dataset
+dataset_ref = client.dataset("nhtsa_traffic_fatalities", project="bigquery-public-data")
+
+# API request - fetch the dataset
+dataset = client.get_dataset(dataset_ref)
+
+# Construct a reference to the "accident_2015" table
+table_ref = dataset_ref.table("accident_2015")
+
+# API request - fetch the table
+table = client.get_table(table_ref)
+
+# Preview the first five lines of the "accident_2015" table
+client.list_rows(table, max_results=5).to_dataframe()
+
+# Query to find out the number of accidents for each day of the week
+query = """
+        select count(consecutive_number) as num_accidents,
+               extract(dayofweek from timestamp_of_crash) as day_of_week
+       from `bigquery-public-data.nhtsa_traffic_fatalities.accident_2015`
+       group by day_of_week
+       order by num_accidents desc
+       """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 1 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**9)
+query_job = client.query(query, job_config=safe_config)
+
+# API request - run the query, and convert the results to a pandas DataFrame
+accidents_by_day = query_job.to_dataframe()
+
+# Print the DataFrame
+accidents_by_day
+
+
+# Government expenditure on education
+# Create a "Client" object
+client = bigquery.Client()
+
+# Construct a reference to the "world_bank_intl_education" dataset
+dataset_ref = client.dataset("world_bank_intl_education", project="bigquery-public-data")
+
+# API request - fetch the dataset
+dataset = client.get_dataset(dataset_ref)
+
+# Construct a reference to the "international_education" table
+table_ref = dataset_ref.table("international_education")
+
+# API request - fetch the table
+table = client.get_table(table_ref)
+
+# Preview the first five lines of the "international_education" table
+client.list_rows(table, max_results=5).to_dataframe()
+
+# Query to find out which countries spend the largest fraction of GDP on education
+country_spend_pct_query = """
+                          select country_name, 
+                                 avg(value) as avg_ed_spending_pct
+                          from `bigquery-public-data.world_bank_intl_education.international_education`
+                          where indicator_code = 'SE.XPD.TOTL.GD.ZS' and year >= 2010 and year <= 2017
+                          group by country_name
+                          order by avg_ed_spending_pct desc
+                          """
+# Set up the query (cancel the query if it would use too much of 
+# your quota, with the limit set to 1 GB)
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+country_spend_pct_query_job = client.query(country_spend_pct_query, job_config=safe_config)
+
+# API request - run the query, and return a pandas DataFrame
+country_spending_results = country_spend_pct_query_job.to_dataframe()
+
+# View top few rows of results
+print(country_spending_results.head()) 
+                          
+
+#Identify interesting codes to explore
+code_count_query = """
+                   select count(country_name) as num_rows,
+                          indicator_name,
+                          indicator_code
+                   from `bigquery-public-data.world_bank_intl_education.international_education`
+                   where year = 2016
+                   group by indicator_name, indicator_code
+                   having num_rows >= 175
+                   order by num_rows desc
+                   """
+# Set up the query
+safe_config = bigquery.QueryJobConfig(maximum_bytes_billed=10**10)
+code_count_query_job = client.query(code_count_query, job_config=safe_config)
+
+# API request - run the query, and return a pandas DataFrame
+code_count_results = code_count_query_job.to_dataframe()
+
+# View top few rows of results
+print(code_count_results.head())
