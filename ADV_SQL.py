@@ -24,6 +24,11 @@ table = client.get_table(table_ref)
 client.list_rows(table, max_results=5).to_dataframe()
 
 
+
+#The query below pulls information from the stories and comments tables to create a table showing all stories posted on January 1, 2012, 
+#along with the corresponding number of comments. 
+#We use a LEFT JOIN so that the results include stories that didn't receive any comments.
+
 # Query to select all stories posted on January 1, 2012, with number of comments
 join_query = """
              WITH c AS
@@ -43,3 +48,27 @@ join_query = """
 # Run the query, and return a pandas DataFrame
 join_result = client.query(join_query).result().to_dataframe()
 join_result.head()
+join_result.tail()
+
+
+#we write a query to select all usernames corresponding to users who wrote stories or comments on January 1, 2014. 
+#We use UNION DISTINCT (instead of UNION ALL) to ensure that each user appears in the table at most once.
+
+# Query to select all users who posted stories or comments on January 1, 2014
+
+union_query = """
+              SELECT c.by
+              FROM `bigquery-public-data.hacker_news.comments` AS c
+              WHERE EXTRACT (DATE FROM c.time_ts) = '2014-01-01'
+              UNION DISTINCT
+              SELECT s.by
+              FROM `bigquery-public-data.hacker_news.stories` AS s
+              WHERE EXTRACT (DATE FROM s.time_ts) = '2014-01-01'
+              """
+# Run the query, and return a pandas DataFrame
+union_result = client.query(union_query).result().to_dataframe()
+union_result.head()            
+
+# Number of users who posted stories or comments on January 1, 2014
+len(union_result)
+
