@@ -361,3 +361,240 @@ break_time_query = """
                    
 break_time_result = client.query(break_time_query).result().to_dataframe()
 break_time_result.head()
+
+
+#-------------------------------------------------------------#
+#NESTED AND REPEATED DATA
+
+# Create a "Client" object
+client = bigquery.Client()
+
+# Construct a reference to the "google_analytics_sample" dataset
+dataset_ref = client.dataset("google_analytics_sample", project="bigquery-public-data")
+
+# Construct a reference to the "ga_sessions_20170801" table
+table_ref = dataset_ref.table("ga_sessions_20170801")
+
+# API request - fetch the table
+table = client.get_table(table_ref)
+
+# Preview the first five lines of the table
+client.list_rows(table, max_results=5).to_dataframe()
+
+table.schema
+
+# Query to count the number of transactions per browser
+query = """
+        SELECT device.browser AS device_browser,
+            SUM(totals.transactions) as total_transactions
+        FROM `bigquery-public-data.google_analytics_sample.ga_sessions_20170801`
+        GROUP BY device_browser
+        ORDER BY total_transactions DESC
+        """
+
+# Run the query, and return a pandas DataFrame
+result = client.query(query).result().to_dataframe()
+result.head()
+
+
+
+# Query to determine most popular landing point on the website
+query = """
+        SELECT hits.page.pagePath as path,
+            COUNT(hits.page.pagePath) as counts
+        FROM `bigquery-public-data.google_analytics_sample.ga_sessions_20170801`, 
+            UNNEST(hits) as hits
+        WHERE hits.type="PAGE" and hits.hitNumber=1
+        GROUP BY path
+        ORDER BY counts DESC
+        """
+
+# Run the query, and return a pandas DataFrame
+result = client.query(query).result().to_dataframe()
+result.head()
+
+#EXERCISES
+#1) Who had the most commits in 2016?
+#GitHub is the most popular place to collaborate on software projects. A GitHub repository (or repo) is a collection of files associated with a specific project, and a GitHub commit is a change that a user has made to a repository.
+#We refer to the user as a committer.
+
+#The sample_commits table contains a small sample of GitHub commits, where each row corresponds to different commit. 
+#The code cell below fetches the table and shows the first five rows of this table.
+
+from google.cloud import bigquery
+
+# Create a "Client" object
+client = bigquery.Client()
+
+# Construct a reference to the "github_repos" dataset
+dataset_ref = client.dataset("github_repos", project="bigquery-public-data")
+
+# API request - fetch the dataset
+dataset = client.get_dataset(dataset_ref)
+
+# Construct a reference to the "sample_commits" table
+table_ref = dataset_ref.table("sample_commits")
+
+# API request - fetch the table
+sample_commits_table = client.get_table(table_ref)
+
+# Preview the first five lines of the table
+client.list_rows(sample_commits_table, max_results=5).to_dataframe()
+
+# Print information on all the columns in the table
+sample_commits_table.schema
+
+#Write a query to find the individuals with the most commits in this table in 2016. Your query should return a table with two columns:
+
+#committer_name - contains the name of each individual with a commit (from 2016) in the table
+#num_commits - shows the number of commits the individual has in the table (from 2016)
+#Sort the table, so that people with more commits appear first.
+
+# Write a query to find the answer
+max_commits_query = """
+                    SELECT committer.name AS committer_name, COUNT(*) AS num_commits
+                    FROM `bigquery-public-data.github_repos.sample_commits`
+                    WHERE EXTRACT(year FROM committer.date) = 2016
+                    GROUP BY committer_name
+                    ORDER BY num_commits DESC
+                    """
+                    
+# Run the query, and return a pandas DataFrame
+result = client.query(max_commits_query).result().to_dataframe()
+result.head()                    
+
+#3) What's the most popular programming language?
+#Write a query to leverage the information in the languages table to determine which programming languages appear in the most repositories. The table returned by your query should have two columns:
+
+#language_name - the name of the programming language
+#num_repos - the number of repositories in the languages table that use the programming language
+
+# Write a query to find the answer
+pop_lang_query = """
+                SELECT l.name as language_name, COUNT(*) as num_repos
+                FROM `bigquery-public-data.github_repos.languages`,
+                    UNNEST(language) AS l
+                GROUP BY language_name
+                ORDER BY num_repos DESC
+                 """
+# Run the query, and return a pandas DataFrame
+result = client.query(pop_lang_query).result().to_dataframe()
+result.head()                    
+
+#4) Which languages are used in the repository with the most languages?
+#For this question, you'll restrict your attention to the repository with name 'polyrabbit/polyglot'.
+
+#Write a query that returns a table with one row for each language in this repository. The table should have two columns:
+
+#name - the name of the programming language
+#bytes - the total number of bytes of that programming language
+#Sort the table by the bytes column so that programming languages that take up more space in the repo appear first.
+
+# Your code here
+all_langs_query = """
+                    SELECT l.name as name, l.bytes as bytes
+                    FROM `bigquery-public-data.github_repos.languages`,
+                        UNNEST(language) AS l
+                    WHERE repo_name = 'polyrabbit/polyglot'
+                    
+                    ORDER BY bytes DESC
+                  """
+# Run the query, and return a pandas DataFrame
+result = client.query(all_langs_query).result().to_dataframe()
+result.head()                   
+
+#---------------------------------------------------------------------#
+#Writing Effcient Queries
+from google.cloud import bigquery
+from time import time
+
+client = bigquery.Client()
+
+def show_amount_of_data_scanned(query):
+    # dry_run lets us see how much data the query uses without running it
+    dry_run_config = bigquery.QueryJobConfig(dry_run=True)
+    query_job = client.query(query, job_config=dry_run_config)
+    print('Data processed: {} GB'.format(round(query_job.total_bytes_processed / 10**9, 3)))
+    
+def show_time_to_run(query):
+    time_config = bigquery.QueryJobConfig(use_query_cache=False)
+    start = time()
+    query_result = client.query(query, job_config=time_config).result()
+    end = time()
+    print('Time to run: {} seconds'.format(round(end-start, 3)))
+    
+#1) Only select the columns you want.
+#It is tempting to start queries with SELECT * FROM .... It's convenient because you don't need to think about which columns you need. But it can be very inefficient.
+
+#This is especially important if there are text fields that you don't need, because text fields tend to be larger than other fields.    
+star_query = "SELECT * FROM `bigquery-public-data.github_repos.contents`"
+show_amount_of_data_scanned(star_query)
+
+basic_query = "SELECT size, binary FROM `bigquery-public-data.github_repos.contents`"
+show_amount_of_data_scanned(basic_query)
+
+#2) Read less data.
+#Both queries below calculate the average duration (in seconds) of one-way bike trips in the city of San Francisco.
+more_data_query = """
+                  SELECT MIN(start_station_name) AS start_station_name,
+                      MIN(end_station_name) AS end_station_name,
+                      AVG(duration_sec) AS avg_duration_sec
+                  FROM `bigquery-public-data.san_francisco.bikeshare_trips`
+                  WHERE start_station_id != end_station_id 
+                  GROUP BY start_station_id, end_station_id
+                  LIMIT 10
+                  """
+show_amount_of_data_scanned(more_data_query)
+
+less_data_query = """
+                  SELECT start_station_name,
+                      end_station_name,
+                      AVG(duration_sec) AS avg_duration_sec                  
+                  FROM `bigquery-public-data.san_francisco.bikeshare_trips`
+                  WHERE start_station_name != end_station_name
+                  GROUP BY start_station_name, end_station_name
+                  LIMIT 10
+                  """
+show_amount_of_data_scanned(less_data_query)
+
+
+#3) Avoid N:N JOINs.
+#An N:N JOIN is one where a group of rows in one table can match a group of rows in the other table. 
+#Note that in general, all other things equal, this type of JOIN produces a table with many more rows than either of the two (original) tables that are being JOINed.
+big_join_query = """
+                 SELECT repo,
+                     COUNT(DISTINCT c.committer.name) as num_committers,
+                     COUNT(DISTINCT f.id) AS num_files
+                 FROM `bigquery-public-data.github_repos.commits` AS c,
+                     UNNEST(c.repo_name) AS repo
+                 INNER JOIN `bigquery-public-data.github_repos.files` AS f
+                     ON f.repo_name = repo
+                 WHERE f.repo_name IN ( 'tensorflow/tensorflow', 'facebook/react', 'twbs/bootstrap', 'apple/swift', 'Microsoft/vscode', 'torvalds/linux')
+                 GROUP BY repo
+                 ORDER BY repo
+                 """
+show_time_to_run(big_join_query)
+
+small_join_query = """
+                   WITH commits AS
+                   (
+                   SELECT COUNT(DISTINCT committer.name) AS num_committers, repo
+                   FROM `bigquery-public-data.github_repos.commits`,
+                       UNNEST(repo_name) as repo
+                   WHERE repo IN ( 'tensorflow/tensorflow', 'facebook/react', 'twbs/bootstrap', 'apple/swift', 'Microsoft/vscode', 'torvalds/linux')
+                   GROUP BY repo
+                   ),
+                   files AS 
+                   (
+                   SELECT COUNT(DISTINCT id) AS num_files, repo_name as repo
+                   FROM `bigquery-public-data.github_repos.files`
+                   WHERE repo_name IN ( 'tensorflow/tensorflow', 'facebook/react', 'twbs/bootstrap', 'apple/swift', 'Microsoft/vscode', 'torvalds/linux')
+                   GROUP BY repo
+                   )
+                   SELECT commits.repo, commits.num_committers, files.num_files
+                   FROM commits 
+                   INNER JOIN files
+                       ON commits.repo = files.repo
+                   ORDER BY repo
+                   """
+show_time_to_run(small_join_query)                   
