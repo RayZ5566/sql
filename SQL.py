@@ -2,7 +2,7 @@ from google.cloud import bigquery
 import os
 
 #setting environment
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'C:/Users/user/Desktop/Kaggle/SQL/t-variety-286403-e5a0529c090d.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '"json-path".json'
 
 #HACKER_NEWS
 client = bigquery.Client()
